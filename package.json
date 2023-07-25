@@ -1,0 +1,17 @@
+{
+  "name": "deuterium",
+  "version": "0.0.0",
+  "description": "",
+  "main": "deuterium.js",
+  "scripts": {
+    "start": "node deuterium.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "type": "module",
+  "author": "YesWeDont",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.3.1",
+    "eslint": "^8.43.0"
+  }
+}
