@@ -3,6 +3,7 @@ import net from 'node:net';
 import http2 from 'node:http2';
 import { logErr, on, off, close } from './util.js';
 const server = http2.createServer();
+const port = (+process.env.PORT) || 1080;
 server.on('session', async session=>{
     // wait for auth
     await new Promise((res, rej)=>{
@@ -73,4 +74,4 @@ server.on('session', async session=>{
         });
     });
 });
-server.listen(1080, '0.0.0.0', ()=>console.log('Deuterium server listening on port 1080'));
+server.listen(port, '0.0.0.0', ()=>console.log('Deuterium server listening on port', port));
