@@ -1,10 +1,10 @@
 {
   "name": "deuterium",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "",
-  "main": "deuterium.js",
+  "main": "pollux.js",
   "scripts": {
-    "start": "node deuterium.js",
+    "start": "node pollux.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "type": "module",
