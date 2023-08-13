@@ -6,6 +6,7 @@ import { ChunkedDecoder, ChunkedEncoder, parseRequestPacket } from './http_polyf
 
 /** @type {Map<string, StreamManager>} */
 const sessions = new Map();
+const port = +(process.env.PORT || 8080);
 
 const server = createServer({allowHalfOpen: true}, async socket=>{
     const err = ()=>{ throw new Error('Stream died before request completion'); };
@@ -67,4 +68,4 @@ const server = createServer({allowHalfOpen: true}, async socket=>{
         else if(reqData.method == 'POST') session.add(1, ChunkedDecoder.from(socket));
     } else return socket.end('HTTP/1.1 204 No Content\r\n\r\n');
 });
-server.listen(8080);
+server.listen(port, ()=>console.log('Pollux up on port %d', port));
