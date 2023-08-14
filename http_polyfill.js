@@ -1,6 +1,6 @@
 // @ts-check
 import net from 'node:net';
-import http from 'node:http';
+// import http from 'node:http';
 import { Transform } from 'node:stream';
 import { once } from 'node:events';
 
@@ -138,6 +138,8 @@ try{
         method: 'CONNECT',
         hostname: url.hostname,
         port: url.port,
+        _auth: auth,
+        _host: url.host,
         headers: auth? { 'Proxy-Authorization': auth } : {}
     };
 } catch(e){ /* Do nothing */ }
@@ -149,14 +151,24 @@ try{
  * @param {string|Buffer} initPacket
  * @returns {Promise<T extends true?[net.Socket, { statusCode: string, statusText: string, httpVersion: string, headers: {[k: string]: string} }]:[net.Socket]>}
 */
-export async function request(url, wait, initPacket=''){
+export async function request(url, wait, initPacket='', skip=false){
+    const urlData = new URL(url);
     let socket; // support for HTTP proxies
-    if(proxyData) {
-        const [res, sock] = await once(http.request({...proxyData, headers:{...proxyData.headers, Host: url}, path: url}).end(), 'connect');
-        if(res.statusCode !== 200) throw new Error(`Unexpected proxy status code ${res.statusCode} headers ${JSON.stringify(res.headers)}`);
+    if(proxyData && !skip) {
+        const [sock, res] = await request(
+            proxyData._host, true,
+            `CONNECT ${urlData.hostname}:${urlData.port} HTTP/1.1 \r\n`+
+            proxyData._auth? `Proxy-Authorization: ${proxyData._auth}` : '' +
+            `Host: ${urlData.hostname}:${urlData.port}\r\n\r\n`,
+            true
+        );
+        if(res.statusCode !== '200') throw new Error(`Unexpected proxy status code ${res.statusCode} headers ${JSON.stringify(res.headers)}`);
         socket = sock;
+        // const [res, sock] = await once(http.request({...proxyData, headers:{...proxyData.headers, Host: url}, path: url}).end(), 'connect');
+        // if(res.statusCode !== 200) throw new Error(`Unexpected proxy status code ${res.statusCode} headers ${JSON.stringify(res.headers)}`);
+        // socket = sock;
     } else {
-        socket = net.connect(+url.split(':')[1], url.split(':')[0]);
+        socket = net.connect(+(urlData.port || 80), urlData.hostname);
         await once(socket, 'connect');
     }
     socket.write(initPacket); // @ts-ignore
