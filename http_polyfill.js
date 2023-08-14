@@ -87,7 +87,7 @@ export class ChunkedDecoder extends Transform{
         this.leftover = empty;
         this.addToBuffer(buf);
     }
-    _destroy(cb){
+    _destroy(err, cb){
         this.buffer = this.leftover = empty;
         cb(null);
     }
@@ -128,7 +128,8 @@ export function parseResponsePacket(data){
         headers
     };
 }
-const proxyURL = process.argv[2];
+
+const proxyURL = process.argv[3];
 let proxyData = undefined;
 try{
     const url =  new URL(proxyURL);
@@ -139,11 +140,10 @@ try{
         hostname: url.hostname,
         port: url.port,
         _auth: auth,
-        _host: url.host,
+        _origin: url.origin,
         headers: auth? { 'Proxy-Authorization': auth } : {}
     };
 } catch(e){ /* Do nothing */ }
-
 /**
  * @template {boolean} T
  * @param {string} url
@@ -153,13 +153,14 @@ try{
 */
 export async function request(url, wait, initPacket='', skip=false){
     const urlData = new URL(url);
+    // console.log(arguments, urlData);
     let socket; // support for HTTP proxies
     if(proxyData && !skip) {
         const [sock, res] = await request(
-            proxyData._host, true,
-            `CONNECT ${urlData.hostname}:${urlData.port} HTTP/1.1 \r\n`+
-            proxyData._auth? `Proxy-Authorization: ${proxyData._auth}` : '' +
-            `Host: ${urlData.hostname}:${urlData.port}\r\n\r\n`,
+            proxyData._origin, true,
+            `CONNECT ${urlData.hostname}:${+(urlData.port||80)} HTTP/1.1\r\n`+
+            (proxyData._auth? `Proxy-Authorization: ${proxyData._auth}\r\n` : '') +
+            `Host: ${urlData.hostname}:${urlData.port || 80}\r\n\r\n`,
             true
         );
         if(res.statusCode !== '200') throw new Error(`Unexpected proxy status code ${res.statusCode} headers ${JSON.stringify(res.headers)}`);

@@ -68,4 +68,4 @@ const server = createServer({allowHalfOpen: true}, async socket=>{
         else if(reqData.method == 'POST') session.add(1, ChunkedDecoder.from(socket));
     } else return socket.end('HTTP/1.1 204 No Content\r\n\r\n');
 });
-server.listen(port, ()=>console.log('Pollux up on port %d', port));
+server.listen(port, '0.0.0.0', ()=>console.log('Pollux up on port %d', port));

@@ -19,7 +19,7 @@ localAddresses.addAddress('::1', 'ipv6');
 localAddresses.addSubnet('fe80::', 10, 'ipv6');
 localAddresses.addSubnet('fc00::', 7, 'ipv6');
 
-const url = 'localhost:8080',
+const url = process.argv[2] || 'http://localhost:8080',
 
     [_rx, response1] = await request(url, true, 'GET / HTTP/1.1\r\n\r\n'),
     sessionId = response1.headers['x-session-id'],
@@ -145,7 +145,7 @@ const server = createServer(async socket=>{
     } else return socket.destroy();
 });
 
-server.listen(5775, ()=>console.log('SOX server up at port 5775'));
+server.listen(5775, '0.0.0.0', ()=>console.log('SOX server up at port 5775'));
 
 
 // function declarations

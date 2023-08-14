@@ -16,7 +16,7 @@ async function add(type){
     }
 }
 
-const url = 'localhost:8080',
+const url = process.argv[2] || 'localhost:8080',
 
     [_rx, response1] = await request(url, true, 'GET / HTTP/1.1\r\n\r\n'),
     sessionId = response1.headers['x-session-id'],
@@ -62,4 +62,4 @@ const server = http.createServer((req, res)=>res.writeHead(405).end('Please use 
         socket.once('error', onerror).once('close', onerror);
         socket.on('error', err=>console.error('Castor socket error: ', err));
     });
-server.listen(5775);
+server.listen(5775, '0.0.0.0', ()=>console.log('Castor HTTP server on port 5775'));
