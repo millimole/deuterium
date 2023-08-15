@@ -67,8 +67,8 @@ const server = createServer({allowHalfOpen: true}, async socket=>{
             try{
                 const target = new URL('tcp://'+data.toString());
                 if(target.pathname || target.hash || target.search || target.password || target.username) throw new Error('Invalid URL');
-                // @ts-ignore ??? why doesnt it work
-                socket = connect({host: target.hostname, port: target.port || '80', allowHalfOpen: true});
+                socket = connect(+(target.port||80), target.hostname.replace(/(^\[|\]$)/g, ''), ()=>0);
+                socket.emit('error', new Error('Server disabled'));
 
 
                 session.once('close-'+id, close);

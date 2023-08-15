@@ -108,13 +108,13 @@ export class StreamManager extends EventEmitter{
                     if(stream[2]) throw throwError('Recieved OPEN frame on a ongoing stream');
                     stream[2] = tunnel;
                     stream[3] = true;
-                }else self._streams.set(id, ['', true, tunnel, true]);
+                }else self._streams.set(id, [self._randomTunnel(0), true, tunnel, true]);
                 self._emit('open', id, data);
             } else if(!stream) // stream specific
                 throw console.error(`Frame ${_data.length} of type ${ev} recieved over a non-existent stream ${id}`);
-            else if(stream[2] !== tunnel){
+            else if(stream[2] && stream[2] !== tunnel){
                 console.debug('Preerror streams', self._streams);
-                throw throwError(`CLOSE frame for ${id} sent over wrong tunnel ${tunnel}, alternate writable tunnel ${stream[1]} existed`);
+                throw throwError(`CLOSE frame for ${id} sent over wrong tunnel ${tunnel}, alternate writable tunnel ${stream[2]} existed`);
             }else if(ev === 'C') {
                 if(self._streams.delete(id)){
                     self._emit('close', id, data);
@@ -148,8 +148,8 @@ export class StreamManager extends EventEmitter{
         let header = (name+(id?'_'+id:''))+'\n',
             frame = Buffer.concat([Buffer.from(header), Buffer.from(data??'')]),
             tunnelInfo = this._streams.get(id),
-            tx = this.txs.get(id?(tunnelInfo?.[0] || ''):this._randomTunnel(0));
-        if(!tunnelInfo && id) return this.close(id, new Error(`Stream to write on (${id}) does not exist`));
+            tx = id? this.txs.get(tunnelInfo?.[0] || '') : this.txs.get(this._randomTunnel(0));
+        if(id && !tunnelInfo) throw new Error(`Stream to write on (${id}) does not exist`);
         if(!tx || (id && !tunnelInfo?.[1])) throw new Error('Tunnel corrupted or stream not writable');
         tx.write(frame, cb);
     }
@@ -188,13 +188,12 @@ export class StreamManager extends EventEmitter{
 
     /** @param {string} id @param {string|Error|Buffer} [error] */
     close(id, error){
+        const trace = new Error(id); trace.name = 'Stream closing';
         const stream = this._streams.get(id);
-        if(!stream) return; // throw new Error('Stream to be closed does not exist');
+        if(!stream){ console.debug(trace); throw new Error('Stream to be closed does not exist'); }
         if(!stream[1]) return this.once('open-'+id, ()=>this.close(id, error)); // prevent the "closing before open ack recv" race condition
         const onrecv = ()=>{
             this._emit('close', id);
-            const trace = new Error(id); trace.name = 'Stream closing';
-            console.debug(trace);
             console.debug('Stream %s closed', id, this._streams);
             this._removeSessionListeners(id)._streams.delete(id);
         };
@@ -223,7 +222,6 @@ export class StreamManager extends EventEmitter{
     open(id, data=''){
         const stream = this._streams.get(id);
         if(!stream) this._streams.set(id, [this._randomTunnel(0), true, '', false]);
-        else if(stream[0] === '') stream[0] = this._randomTunnel(0);
         else throw new Error('Attempted to open an already existing stream');
         this._send({id, name:'O', data});
     }

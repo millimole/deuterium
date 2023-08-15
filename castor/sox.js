@@ -35,7 +35,7 @@ session.add(0, tx, (await once(session, 'ack'))[0]);
 await (add(0).then(()=>add(1))); // four tunnels
 console.log('Successfully authorized to Pollux');
 
-_tx.on('data', d=>console.error('Premature response of', parseResponsePacket(d)));
+_tx.on('data', d=>console.error('Premature response of', parseResponsePacket(d), d.toString()));
 session.on('cleanup', ()=>{ throw new Error('Session destroyed'); });
 
 // top-tier error handlers

@@ -14,9 +14,10 @@
         const pre = document.querySelector('pre'),
             h1 = document.querySelector('h1'),
             endpoint = './log.log'+window.location.search,
-            timer = setInterval(makeRequest, 500);
+            timer = setInterval(makeRequest, 500),
+            ac = new AbortController();
         function makeRequest(){
-            fetch(endpoint).then(res=>res.text()).then(txt=>{
+            fetch(endpoint, {signal: ac.signal}).then(res=>res.text()).then(txt=>{
                 const wasEmpty = !pre.innerHTML, newText = ansiHTML(txt);
                 if(newText.length < pre.innerHTML.length) return stopSession();
                 if(newText !== pre.innerHTML) pre.innerHTML = newText;
@@ -25,7 +26,7 @@
         }
         function stopSession(){
             alert('Session disconnected, please reload page for updates');
-            clearInterval(timer);
+            clearInterval(timer); ac.abort();
         }
     </script>
 </body>
