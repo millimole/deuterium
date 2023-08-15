@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'>
+    <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>Logs console</title>
+</head>
+<body style='font-family: Cascadia Mono, monospace; background: #000; display: flex; flex-direction: column; height: 100vh; margin: 0;'>
+    <h1 style='text-align: center; color: grey; border-bottom: 1px solid #fff; margin: 0;' title='And quite an advanced and efficent one, must I say...'>Logs panel</h1>
+    <pre style='color: #fff; overflow-y: scroll; flex-grow: 1; margin-left: 8px; font-size: large'></pre>
+    <script type='module'>
+        import ansiHTML from 'https://esm.run/ansi-html';
+        const pre = document.querySelector('pre'), h1 = document.querySelector('h1'), endpoint = './log.log'+window.location.search;
+        let currentSessionStart = undefined
+        setInterval(makeRequest, 1000); makeRequest()
+        function makeRequest(){ fetch(endpoint).then(res=>res.text()).then(txt=>{
+            const wasEmpty = !pre.innerHTML, newText = ansiHTML(txt);
+            if(newText !== pre.innerHTML) pre.innerHTML = newText;
+            if(wasEmpty) pre.scrollTop = pre.scrollHeight - pre.clientHeight;
+        }); }
+    </script>
+</body>
+</html>

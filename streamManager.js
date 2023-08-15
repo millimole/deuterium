@@ -101,7 +101,7 @@ export class StreamManager extends EventEmitter{
 
             // stream & tunnel inspecific
             if(ev == 'A') self.emit('ack', data.toString()); // ack
-            else if(ev == 'E') return self.emit('_error', new Error(data.toString()), false); // error
+            else if(ev == 'E') self.emit('_error', new Error(data.toString()), false); // error
             else if(ev == 'P') self.refreshTimeout(); // ping
             else if(ev == 'O'){ // open
                 if(stream){

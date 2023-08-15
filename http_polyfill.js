@@ -1,5 +1,6 @@
 // @ts-check
 import net from 'node:net';
+import tls from 'node:tls';
 // import http from 'node:http';
 import { Transform } from 'node:stream';
 import { once } from 'node:events';
@@ -10,12 +11,12 @@ const crlf = Buffer.from('\r\n');
 const trailerDataWarning = 'Data recieved after stream ended. This is presumably trailer data, which will be ignored.';
 
 export class ChunkedEncoder extends Transform{
-    /** @param {import('net').Socket} socket */
-    static from(socket){
+    /** @param {import('node:stream').Writable} stream */
+    static from(stream){
         const res = new ChunkedEncoder();
-        res.pipe(socket);
-        socket.on('error', err=>!res.errored && res.emit('error', err));
-        res.on('error', err=>!socket.errored && socket.emit('error', err));
+        res.pipe(stream);
+        stream.on('error', err=>!res.errored && res.emit('error', err));
+        res.on('error', err=>!stream.errored && stream.emit('error', err));
         return res;
     }
     _transform(_chunk, enc, cb){
@@ -31,12 +32,12 @@ export class ChunkedDecoder extends Transform{
     ended = false;
     leftover = empty;
 
-    /** @param {import('net').Socket} socket */
-    static from(socket){
+    /** @param {import('node:stream').Readable} stream */
+    static from(stream){
         const req = new ChunkedDecoder();
-        socket.pipe(req);
-        socket.on('error', err=>!req.errored && req.emit('error', err));
-        req.on('error', err=>!socket.errored && socket.emit('error', err));
+        stream.pipe(req);
+        stream.on('error', err=>!req.errored && req.emit('error', err));
+        req.on('error', err=>!stream.errored && stream.emit('error', err));
         return req;
     }
 
@@ -158,19 +159,28 @@ export async function request(url, wait, initPacket='', skip=false){
     if(proxyData && !skip) {
         const [sock, res] = await request(
             proxyData._origin, true,
-            `CONNECT ${urlData.hostname}:${+(urlData.port||80)} HTTP/1.1\r\n`+
+            `CONNECT ${urlData.hostname}:${+(urlData.port || (urlData.protocol == 'https:'?443:80))} HTTP/1.1\r\n`+
             (proxyData._auth? `Proxy-Authorization: ${proxyData._auth}\r\n` : '') +
-            `Host: ${urlData.hostname}:${urlData.port || 80}\r\n\r\n`,
+            `Host: ${urlData.hostname}:${urlData.port || (urlData.protocol == 'https:'?443:80)}\r\n\r\n`,
             true
         );
         if(res.statusCode !== '200') throw new Error(`Unexpected proxy status code ${res.statusCode} headers ${JSON.stringify(res.headers)}`);
-        socket = sock;
+        if(urlData.protocol == 'https:'){
+            const tlsSocket = tls.connect({socket: sock, host: urlData.host, servername: urlData.host});
+            await once(tlsSocket, 'secureConnect');
+            socket = tlsSocket;
+        }else socket = sock;
         // const [res, sock] = await once(http.request({...proxyData, headers:{...proxyData.headers, Host: url}, path: url}).end(), 'connect');
         // if(res.statusCode !== 200) throw new Error(`Unexpected proxy status code ${res.statusCode} headers ${JSON.stringify(res.headers)}`);
         // socket = sock;
     } else {
-        socket = net.connect(+(urlData.port || 80), urlData.hostname);
+        socket = net.connect(+(urlData.port || (urlData.protocol == 'https:'?443:80)), urlData.hostname);
         await once(socket, 'connect');
+        if(urlData.protocol == 'https:'){
+            const tlsSocket = tls.connect({socket, host: urlData.host, servername: urlData.host});
+            await once(tlsSocket, 'secureConnect');
+            socket = tlsSocket;
+        }
     }
     socket.write(initPacket); // @ts-ignore
     if(wait) return [socket, parseResponsePacket((await once(socket, 'data'))[0])]; // @ts-ignore

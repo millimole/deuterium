@@ -20,10 +20,11 @@ localAddresses.addSubnet('fe80::', 10, 'ipv6');
 localAddresses.addSubnet('fc00::', 7, 'ipv6');
 
 const url = process.argv[2] || 'http://localhost:8080',
+    urlData = new URL(url),
 
-    [_rx, response1] = await request(url, true, 'GET / HTTP/1.1\r\n\r\n'),
+    [_rx, response1] = await request(url, true, `GET / HTTP/1.1\r\nHost: ${urlData.host}\r\n\r\n`),
     sessionId = response1.headers['x-session-id'],
-    [_tx] = await request(url, false, `POST / HTTP/1.1\r\nX-Session-ID: ${sessionId}\r\nTransfer-Encoding:chunked\r\n\r\n`),
+    [_tx] = await request(url, false, `POST / HTTP/1.1\r\nHost:${urlData.host}\r\nX-Session-ID: ${sessionId}\r\nTransfer-Encoding:chunked\r\n\r\n`),
     
     rx = ChunkedDecoder.from(_rx), tx=ChunkedEncoder.from(_tx),
     session = new StreamManager();
@@ -170,11 +171,11 @@ function pipeToSocket(host, port, socket, success, fail){
 // quickly add a new stream
 async function add(type){
     if(type == 1) {
-        const [rx, response] = await request(url, true, 'GET / HTTP/1.1\r\nX-Session-ID: '+sessionId+'\r\n\r\n');
+        const [rx, response] = await request(url, true, `GET / HTTP/1.1\r\nX-Session-ID: ${sessionId}\r\nHost: ${urlData.host}\r\n\r\n`);
         if(response.statusCode === '200') session.add(1, ChunkedDecoder.from(rx), response.headers['x-stream-id']);
     }
     else if (type == 0){
-        const [tx] = await request(url, false, 'POST / HTTP/1.1\r\nX-Session-ID: '+sessionId+'\r\n\r\n');
+        const [tx] = await request(url, false, `POST / HTTP/1.1\r\nX-Session-ID: ${sessionId}\r\nHost: ${urlData.host}\r\n\r\n`);
         session.add(0, ChunkedEncoder.from(tx), (await once(session, 'ack'))[0]);
     }
 }
