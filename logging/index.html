@@ -12,13 +12,19 @@
     <script type='module'>
         import ansiHTML from 'https://esm.run/ansi-html';
         const pre = document.querySelector('pre'), h1 = document.querySelector('h1'), endpoint = './log.log'+window.location.search;
-        let currentSessionStart = undefined
-        setInterval(makeRequest, 1000); makeRequest()
-        function makeRequest(){ fetch(endpoint).then(res=>res.text()).then(txt=>{
-            const wasEmpty = !pre.innerHTML, newText = ansiHTML(txt);
-            if(newText !== pre.innerHTML) pre.innerHTML = newText;
-            if(wasEmpty) pre.scrollTop = pre.scrollHeight - pre.clientHeight;
-        }); }
+        let timer = setInterval(makeRequest, 500);
+        function makeRequest(){
+            fetch(endpoint).then(res=>res.text()).then(txt=>{
+                const wasEmpty = !pre.innerHTML, newText = ansiHTML(txt);
+                if(newText.length < pre.innerHTML.length) return stopSession();
+                if(newText !== pre.innerHTML) pre.innerHTML = newText;
+                if(wasEmpty) pre.scrollTop = pre.scrollHeight - pre.clientHeight;
+            })
+        }
+        function stopSession(){
+            alert('Session disconnected, please reload page for updates');
+            clearInterval(interval);
+        }
     </script>
 </body>
 </html>
