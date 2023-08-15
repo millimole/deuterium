@@ -108,7 +108,7 @@ export class StreamManager extends EventEmitter{
                     if(stream[2]) throw throwError('Recieved OPEN frame on a ongoing stream');
                     stream[2] = tunnel;
                     stream[3] = true;
-                }else self._streams.set(id, [self._randomTunnel(0), true, tunnel, true]);
+                }else self._streams.set(id, ['', true, tunnel, true]);
                 self._emit('open', id, data);
             } else if(!stream) // stream specific
                 throw console.error(`Frame ${_data.length} of type ${ev} recieved over a non-existent stream ${id}`);
@@ -147,8 +147,9 @@ export class StreamManager extends EventEmitter{
         if(typeof name !== 'string') throw new Error('Event name must be a string');
         let header = (name+(id?'_'+id:''))+'\n',
             frame = Buffer.concat([Buffer.from(header), Buffer.from(data??'')]),
-            tunnelInfo = this._streams.get(id),
-            tx = id? this.txs.get(tunnelInfo?.[0] || '') : this.txs.get(this._randomTunnel(0));
+            tunnelInfo = this._streams.get(id);
+        if(tunnelInfo?.[1] && !tunnelInfo[0]) tunnelInfo[0] = this._randomTunnel(0);
+        let tx = id? this.txs.get(tunnelInfo?.[0] || '') : this.txs.get(this._randomTunnel(0));
         if(id && !tunnelInfo) throw new Error(`Stream to write on (${id}) does not exist`);
         if(!tx || (id && !tunnelInfo?.[1])) throw new Error('Tunnel corrupted or stream not writable');
         tx.write(frame, cb);
@@ -222,7 +223,7 @@ export class StreamManager extends EventEmitter{
     open(id, data=''){
         const stream = this._streams.get(id);
         if(!stream) this._streams.set(id, [this._randomTunnel(0), true, '', false]);
-        else throw new Error('Attempted to open an already existing stream');
+        else if(stream[0]) throw new Error('Attempted to open an already existing stream');
         this._send({id, name:'O', data});
     }
 
