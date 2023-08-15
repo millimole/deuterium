@@ -68,8 +68,6 @@ const server = createServer({allowHalfOpen: true}, async socket=>{
                 const target = new URL('tcp://'+data.toString());
                 if(target.pathname || target.hash || target.search || target.password || target.username) throw new Error('Invalid URL');
                 socket = connect(+(target.port||80), target.hostname.replace(/(^\[|\]$)/g, ''), ()=>0);
-                socket.emit('error', new Error('Server disabled'));
-
 
                 session.once('close-'+id, close);
                 socket.on('error', err=>console.error('Pollux socket error:', err)).once('close', close);
