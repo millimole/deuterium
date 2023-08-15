@@ -11,8 +11,10 @@
     <pre style='color: #fff; overflow-y: scroll; flex-grow: 1; margin-left: 8px; font-size: large'></pre>
     <script type='module'>
         import ansiHTML from 'https://esm.run/ansi-html';
-        const pre = document.querySelector('pre'), h1 = document.querySelector('h1'), endpoint = './log.log'+window.location.search;
-        let timer = setInterval(makeRequest, 500);
+        const pre = document.querySelector('pre'),
+            h1 = document.querySelector('h1'),
+            endpoint = './log.log'+window.location.search,
+            timer = setInterval(makeRequest, 500);
         function makeRequest(){
             fetch(endpoint).then(res=>res.text()).then(txt=>{
                 const wasEmpty = !pre.innerHTML, newText = ansiHTML(txt);
@@ -23,7 +25,7 @@
         }
         function stopSession(){
             alert('Session disconnected, please reload page for updates');
-            clearInterval(interval);
+            clearInterval(timer);
         }
     </script>
 </body>
