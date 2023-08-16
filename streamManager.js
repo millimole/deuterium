@@ -21,13 +21,13 @@ export class StreamManager extends EventEmitter{
         super(); const self = this;
         
         // timeouts
-        this._onTimeout = ()=>this.emit('_error', new Error('No PING response, timed out'), true);
-        this._timeoutTimer = setTimeout(this._onTimeout, StreamManager.TIMEOUT);
-        this._pingTimer = setInterval(()=>{
-            console.log('Sending pings...');
-            console.log('Stream map:', this._streams);
-            this._send({name:'P'});
-        }, StreamManager.TIMEOUT/2);
+        // this._onTimeout = ()=>this.emit('_error', new Error('No PING response, timed out'), true);
+        // this._timeoutTimer = setTimeout(this._onTimeout, StreamManager.TIMEOUT);
+        // this._pingTimer = setInterval(()=>{
+        //     console.log('Sending pings...');
+        //     console.log('Stream map:', this._streams);
+        //     this._send({name:'P'});
+        // }, StreamManager.TIMEOUT/2);
 
         // error management
         this.on('_error', (err, wasInternal)=>{
@@ -56,8 +56,7 @@ export class StreamManager extends EventEmitter{
                 rx.off('close', this._onClose).off('tx', this._onData).off('error', this._onError)
                     .destroy();
             }); this.rxs.clear();
-            clearInterval(this._pingTimer);
-            clearTimeout(this._timeoutTimer);
+            // clearInterval(this._pingTimer); clearTimeout(this._timeoutTimer);
             console.log('StreamManager GC');
         });
 
@@ -102,7 +101,11 @@ export class StreamManager extends EventEmitter{
             // stream & tunnel inspecific
             if(ev == 'A') self.emit('ack', data.toString()); // ack
             else if(ev == 'E') self.emit('_error', new Error(data.toString()), false); // error
-            else if(ev == 'P') self.refreshTimeout(); // ping
+            // else if(ev == 'P') { // ping
+            //     clearTimeout(this._timeoutTimer);
+            //     console.log('PING recived, extending timeout...');
+            //     this._timeoutTimer = setTimeout(this._onTimeout, StreamManager.TIMEOUT);
+            // }
             else if(ev == 'O'){ // open
                 console.debug('OPEN %s rx=%s', id, tunnel);
                 if(stream){
@@ -192,6 +195,7 @@ export class StreamManager extends EventEmitter{
 
     /** @param {string} id @param {string|Error|Buffer} [error] */
     close(id, error){
+        if(!this.alive) return;
         const trace = new Error(id); trace.name = 'Stream closing';
         const stream = this._streams.get(id);
         if(!stream){ console.debug(trace); throw new Error('Stream to be closed does not exist'); }
@@ -206,10 +210,11 @@ export class StreamManager extends EventEmitter{
     
     /** Send data over a stream
      * @param {string} id @param {string|Buffer} data */
-    data(id, data){ this._send({id, name:'D', data}); }
+    data(id, data){ if(this.alive) this._send({id, name:'D', data}); }
 
     /** @param {string} id */
     end(id){
+        if(!this.alive) return;
         const stream = this._streams.get(id);
         if(stream){
             this._send({id, name:'H'}, ()=>{
@@ -224,15 +229,10 @@ export class StreamManager extends EventEmitter{
 
     /** Select a random tunnel & start stream @param {string} id @param {string|Buffer} data */
     open(id, data=''){
+        if(!this.alive) return;
         const stream = this._streams.get(id);
         if(!stream) this._streams.set(id, [this._randomTunnel(0), true, '', false]);
         else if(stream[0]) throw new Error('Attempted to open an already existing stream');
         this._send({id, name:'O', data});
-    }
-
-    refreshTimeout(){
-        clearTimeout(this._timeoutTimer);
-        console.log('PING recived, extending timeout...');
-        this._timeoutTimer = setTimeout(this._onTimeout, StreamManager.TIMEOUT);
     }
 }
