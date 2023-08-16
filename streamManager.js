@@ -1,5 +1,6 @@
 // @ts-check
 import EventEmitter from 'node:events';
+import { ChunkedDecoder, ChunkedEncoder } from './http_polyfill.js';
 /** @typedef {import('node:stream').Readable} Readable */
 /** @typedef {import('node:stream').Writable} Writable */
 
@@ -48,8 +49,7 @@ export class StreamManager extends EventEmitter{
             this._streams.clear();
             this.txs.forEach(tx=>{
                 tx.off('close', this._onClose).off('tx', this._onData).off('error', this._onError);
-                if(tx.writableNeedDrain) tx.on('drain', ()=>tx.destroy());
-                else tx.destroy();
+                tx.destroy();
             });
             this.txs.clear();
             this.rxs.forEach(rx=>{
@@ -104,6 +104,7 @@ export class StreamManager extends EventEmitter{
             else if(ev == 'E') self.emit('_error', new Error(data.toString()), false); // error
             else if(ev == 'P') self.refreshTimeout(); // ping
             else if(ev == 'O'){ // open
+                console.debug('OPEN %s rx=%s', id, tunnel);
                 if(stream){
                     if(stream[2]) throw throwError('Recieved OPEN frame on a ongoing stream');
                     stream[2] = tunnel;
@@ -171,20 +172,22 @@ export class StreamManager extends EventEmitter{
         return ret;
     }
 
-    /** @template {0|1} T @param {T} type @param {T extends 0?Writable:Readable} tunnel @param {string} [name] */
+    /** @overload @param {0} type @param {Writable} tunnel @param {string} [name] */
+    /** @overload @param {1} type @param {Readable} tunnel @param {string} [name] */
+    /** @param {0|1} type @param {Writable|Readable} tunnel @param {string} [name] */
     add(type, tunnel, name=genId()){
-        tunnel.on('close', this._onClose).on('error', this._onError);
         if(type == 0 && 'writable' in tunnel){
-            this.txs.set(name, tunnel);
-            return name;
+            let tunnel2 = ChunkedEncoder.fromStream(tunnel);
+            this.txs.set(name,  tunnel = tunnel2);
         }
         else if(type == 1 && 'readable' in tunnel) {
-            tunnel.on('data', this._onData);
-            this.rxs.set(name, tunnel);
-            try{ this._send({name:'A', data: name}); console.log('ACK sent'); } catch(e){/*Ignore*/}
-            return name;
+            let tunnel2 = ChunkedDecoder.fromStream(tunnel);
+            this.rxs.set(name, tunnel = tunnel2.on('data', this._onData));
+            try{ this._send({name:'A', data: name}); } catch(e){/*Ignore*/}
         }
-        else throw new Error('Invalid type, should be 0 or 1');
+        else throw new Error('Either an invalid type (should be 0 or 1) or invalid tunnel (type 0 = writable, type 1 = readable) provided');
+        tunnel.on('close', this._onClose).on('error', this._onError);
+        return name;
     }
 
     /** @param {string} id @param {string|Error|Buffer} [error] */
@@ -194,8 +197,8 @@ export class StreamManager extends EventEmitter{
         if(!stream){ console.debug(trace); throw new Error('Stream to be closed does not exist'); }
         if(!stream[1]) return this.once('open-'+id, ()=>this.close(id, error)); // prevent the "closing before open ack recv" race condition
         const onrecv = ()=>{
-            this._emit('close', id);
             console.debug('Stream %s closed', id, this._streams);
+            this._emit('close', id);
             this._removeSessionListeners(id)._streams.delete(id);
         };
         this._send({id, name: 'C', data: error instanceof Error?error.message:error}, onrecv);

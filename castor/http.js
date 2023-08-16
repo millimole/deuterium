@@ -8,11 +8,11 @@ import { ChunkedDecoder, ChunkedEncoder, parseResponsePacket, request } from '..
 async function add(type){
     if(type == 1) {
         const [rx, response] = await request(url, true, 'GET / HTTP/1.1\r\nX-Session-ID: '+sessionId+'\r\n\r\n');
-        if(response.statusCode === '200') session.add(1, ChunkedDecoder.from(rx), response.headers['x-stream-id']);
+        if(response.statusCode === '200') session.add(1, ChunkedDecoder.fromStream(rx), response.headers['x-stream-id']);
     }
     else if (type == 0){
         const [tx] = await request(url, false, 'POST / HTTP/1.1\r\nX-Session-ID: '+sessionId+'\r\n\r\n');
-        session.add(0, ChunkedEncoder.from(tx), (await once(session, 'ack'))[0]);
+        session.add(0, ChunkedEncoder.fromStream(tx), (await once(session, 'ack'))[0]);
     }
 }
 
@@ -22,8 +22,8 @@ const url = process.argv[2] || 'localhost:8080',
     sessionId = response1.headers['x-session-id'],
     [_tx] = await request(url, false, `POST / HTTP/1.1\r\nX-Session-ID: ${sessionId}\r\nTransfer-Encoding:chunked\r\n\r\n`),
     
-    rx = ChunkedDecoder.from(_rx), tx=ChunkedEncoder.from(_tx),
-    session = new StreamManager();
+    rx = ChunkedDecoder.fromStream(_rx), tx=ChunkedEncoder.fromStream(_tx),
+    session = new StreamManager().on('cleanup', ()=>{ throw new Error('Session destroyed'); });
 
 session.add(1, rx, response1.headers['x-stream-id']);
 console.log('RX request sent, waiting for TX response');
@@ -31,8 +31,7 @@ session.add(0, tx, (await once(session, 'ack'))[0]);
 await (add(0).then(()=>add(1))); // four tunnels
 console.log('Successfully authorized to Pollux');
 
-_tx.on('data', d=>console.error('Premature response of', parseResponsePacket(d)));
-session.on('cleanup', ()=>{ throw new Error('Session destroyed'); });
+_tx.on('data', d=>console.error('Premature response of', parseResponsePacket(d), d.toString()));
 
 const server = http.createServer((req, res)=>res.writeHead(405).end('Please use the CONNECT method instead.'))
     .on('connect', (req, socket)=>{

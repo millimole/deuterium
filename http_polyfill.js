@@ -12,11 +12,11 @@ const trailerDataWarning = 'Data recieved after stream ended. This is presumably
 
 export class ChunkedEncoder extends Transform{
     /** @param {import('node:stream').Writable} stream */
-    static from(stream){
+    static fromStream(stream){
         const res = new ChunkedEncoder();
-        res.pipe(stream);
-        stream.on('error', err=>!res.errored && res.emit('error', err));
-        res.on('error', err=>!stream.errored && stream.emit('error', err));
+        res.once('close', ()=>stream.destroy()).pipe(stream)
+            .on('error', err=>res.emit('error', err))
+            .once('close', ()=>res.destroy());
         return res;
     }
     _transform(_chunk, enc, cb){
@@ -33,12 +33,12 @@ export class ChunkedDecoder extends Transform{
     leftover = empty;
 
     /** @param {import('node:stream').Readable} stream */
-    static from(stream){
+    static fromStream(stream){
         const req = new ChunkedDecoder();
-        stream.pipe(req);
-        stream.on('error', err=>!req.errored && req.emit('error', err));
-        req.on('error', err=>!stream.errored && stream.emit('error', err));
-        return req;
+        return stream
+            .once('close', ()=>req.destroy())
+            .on('error', err=>req.emit('error', err))
+            .pipe(req).once('close', ()=>stream.destroy());
     }
 
     _transform(_chunk, enc, cb){

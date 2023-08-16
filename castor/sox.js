@@ -26,17 +26,17 @@ const url = process.argv[2] || 'http://localhost:8080',
     sessionId = response1.headers['x-session-id'],
     [_tx] = await request(url, false, `POST / HTTP/1.1\r\nHost:${urlData.host}\r\nX-Session-ID: ${sessionId}\r\nTransfer-Encoding:chunked\r\n\r\n`),
     
-    rx = ChunkedDecoder.from(_rx), tx=ChunkedEncoder.from(_tx),
-    session = new StreamManager();
+    rx = ChunkedDecoder.fromStream(_rx), tx=ChunkedEncoder.fromStream(_tx),
+    session = new StreamManager().on('cleanup', ()=>{ throw new Error('Session destroyed'); });
 
 session.add(1, rx, response1.headers['x-stream-id']);
 console.log('RX request sent, waiting for TX response');
 session.add(0, tx, (await once(session, 'ack'))[0]);
 await (add(0).then(()=>add(1))); // four tunnels
 console.log('Successfully authorized to Pollux');
+session.on('close', id=>console.log('Stream %s close', id));
 
 _tx.on('data', d=>console.error('Premature response of', parseResponsePacket(d), d.toString()));
-session.on('cleanup', ()=>{ throw new Error('Session destroyed'); });
 
 // top-tier error handlers
 const clientError = err => console.debug('Client error', err);
@@ -97,7 +97,6 @@ const server = createServer(async socket=>{
         if(protocols.length !== initPacket.readUInt8(1)) return socket.end(Buffer.from([0x05, 0xff])); // Length does not match list of protocols provided
         if(protocols.indexOf(0) < 0) return socket.end(Buffer.from([0x05, 0xff])); // No acceptable protocol (only supports no authentication)
         await new Promise((res, rej)=>socket.write(Buffer.from([0x05, 0x00]), (err)=>err?rej(err):res(!0)));
-        console.log('%s Chosen auth method: 0x00 NOAUTH', rid);
         // recv VER(1) CMD(1) RSV(1;0x00) TYPE(1;0x01|0x03|0x04) ADDR(VAR|4|16) PORT(2)
         // send VER(1) REP(1) RSV(1;0x00) TYPE(1;0x01|0x03|0x04) ADDR(VAR|4|16) PORT(2)
         socket.once('close', throwing);
@@ -172,11 +171,11 @@ function pipeToSocket(host, port, socket, success, fail){
 async function add(type){
     if(type == 1) {
         const [rx, response] = await request(url, true, `GET / HTTP/1.1\r\nX-Session-ID: ${sessionId}\r\nHost: ${urlData.host}\r\n\r\n`);
-        if(response.statusCode === '200') session.add(1, ChunkedDecoder.from(rx), response.headers['x-stream-id']);
+        if(response.statusCode === '200') session.add(1, ChunkedDecoder.fromStream(rx), response.headers['x-stream-id']);
     }
     else if (type == 0){
         const [tx] = await request(url, false, `POST / HTTP/1.1\r\nX-Session-ID: ${sessionId}\r\nHost: ${urlData.host}\r\n\r\n`);
-        session.add(0, ChunkedEncoder.from(tx), (await once(session, 'ack'))[0]);
+        session.add(0, ChunkedEncoder.fromStream(tx), (await once(session, 'ack'))[0]);
     }
 }
 

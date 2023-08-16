@@ -27,11 +27,12 @@ const server = createServer({allowHalfOpen: true}, async socket=>{
         if(reqData.url.startsWith('/logs') && reqData.url.endsWith(pathSuffix)){
             if(reqData.url.startsWith('/logs/log.log')) return socket.write(
                 'HTTP/1.1 200 OK\r\n' +
+                'Cache-Control: no-store\r\n' +
                 'Transfer-Encoding: chunked\r\n' + 
                 'Content-Type: text/plain\r\n\r\n',
                 err=>{
                     if(err) return console.error(err);
-                    else return createReadStream(logFile).pipe(ChunkedEncoder.from(socket).on('error', err=>console.debug(err)));
+                    else return createReadStream(logFile).pipe(ChunkedEncoder.fromStream(socket).on('error', err=>console.debug(err)));
                 });
             else if(reqData.url == ('/logs'+ pathSuffix)) return socket.end('HTTP/1.1 301 Permanent Redirect\r\nLocation: /logs/index.html'+pathSuffix+'\r\n\r\n');
             else return socket.write(
@@ -42,11 +43,12 @@ const server = createServer({allowHalfOpen: true}, async socket=>{
                 err=>{
                     console.log('Recieved miscellaneous request to /logs, replying with HTML file');
                     if(err) return console.error(err);
-                    else return createReadStream(logHTML).pipe(ChunkedEncoder.from(socket).on('error', err=>console.debug(err)));
+                    else return createReadStream(logHTML).pipe(ChunkedEncoder.fromStream(socket).on('error', err=>console.debug(err)));
                 });
-        } else if(reqData.url !== '/') return socket.end('HTTP/1.1 204 No Content\r\n\r\n');
+        } else if(reqData.url !== '/') return socket.end('HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\nHello, world!');
 
-        const session = new StreamManager(), sessionId = genId(), res = ChunkedEncoder.from(socket);
+        const session = new StreamManager(), sessionId = genId(), res = ChunkedEncoder.fromStream(socket);
+        console.log('Session %s create & add GET stream', sessionId);
         socket.write(
             'HTTP/1.1 200 OK\r\n'+
             `X-Stream-ID: ${session.add(0, res)}\r\n`+
@@ -54,7 +56,6 @@ const server = createServer({allowHalfOpen: true}, async socket=>{
             'Transfer-Encoding: chunked\r\n\r\n'
         );
         session.once('cleanup', ()=>{ sessions.delete(sessionId); });
-        session.once('error', err=>console.error('Session error: ', err));
         sessions.set(sessionId, session);
         // more setup
         session.on('open', async (id, data)=>{
@@ -79,19 +80,22 @@ const server = createServer({allowHalfOpen: true}, async socket=>{
                 await once(socket, 'connect'); session.open(id);
             }catch(e){ close(); console.error('Pollux connection error', e); }
         });
-        session.once('close', id=>console.log('Stream %s close', id));
-        session.once('error', err=>console.error('Session %s error:', sessionId, err));
+        session.on('close', id=>console.log('Stream %s close', id));
+        session.on('error', err=>console.error('Session %s error:', sessionId, err));
     } else if(reqData.headers['x-session-id']){
         const session = sessions.get(reqData.headers['x-session-id']+'');
         if(!session) return socket.end('HTTP/1.1 401 Unauthorised\r\n\r\n');
-        if(reqData.method == 'GET')
-            socket.write(
-                'HTTP/1.1 200 OK\r\n'+
-                'Transfer-Encoding: chunked\r\n'+
-                `X-Session-ID: ${reqData.headers['x-session-id']}\r\n`+
-                `X-Stream-ID: ${session.add(0, ChunkedEncoder.from(socket))}\r\n\r\n`
-            );
-        else if(reqData.method == 'POST') session.add(1, ChunkedDecoder.from(socket));
+        if(reqData.method == 'GET') socket.write(
+            'HTTP/1.1 200 OK\r\n'+
+            'Transfer-Encoding: chunked\r\n'+
+            `X-Session-ID: ${reqData.headers['x-session-id']}\r\n`+
+            `X-Stream-ID: ${session.add(0, ChunkedEncoder.fromStream(socket))}\r\n\r\n`,
+            ()=>console.log('Session %s added GET stream', reqData.headers['x-session-id'])
+        );
+        else if(reqData.method == 'POST'){
+            session.add(1, ChunkedDecoder.fromStream(socket));
+            console.log('Session %s added POST stream', reqData.headers['x-session-id']);
+        }
     } else return socket.end('HTTP/1.1 204 No Content\r\n\r\n');
 });
 server.listen(port, '0.0.0.0', ()=>console.log('Pollux up on port %d', port));
