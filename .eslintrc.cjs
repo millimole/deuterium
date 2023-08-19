@@ -6,15 +6,9 @@ module.exports = {
     'extends': 'eslint:recommended',
     'overrides': [
         {
-            'env': {
-                'node': true
-            },
-            'files': [
-                '.eslintrc.{js,cjs}'
-            ],
-            'parserOptions': {
-                'sourceType': 'script'
-            }
+            'env': { 'node': true },
+            'files': [ '.eslintrc.{js,cjs}' ],
+            'parserOptions': { 'sourceType': 'script' }
         }
     ],
     'parserOptions': {
@@ -22,21 +16,10 @@ module.exports = {
         'sourceType': 'module'
     },
     'rules': {
-        'indent': [
-            'error',
-            4
-        ],
-        'linebreak-style': [
-            'error',
-            'windows'
-        ],
-        'quotes': [
-            'error',
-            'single'
-        ],
-        'semi': [
-            'error',
-            'always'
-        ]
+        'indent': [ 'error', 4 ],
+        'linebreak-style': [ 'error', 'windows' ],
+        'quotes': [ 'error', 'single' ],
+        'semi': [ 'error', 'always' ],
+        'no-trailing-spaces': [ 'error' ]
     }
 };

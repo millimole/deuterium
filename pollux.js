@@ -28,7 +28,7 @@ const server = createServer({allowHalfOpen: true}, async socket=>{
             if(reqData.url.startsWith('/logs/log.log')) return socket.write(
                 'HTTP/1.1 200 OK\r\n' +
                 'Cache-Control: no-store\r\n' +
-                'Transfer-Encoding: chunked\r\n' + 
+                'Transfer-Encoding: chunked\r\n' +
                 'Content-Type: text/plain\r\n\r\n',
                 err=>{
                     if(err) return console.error(err);
@@ -61,24 +61,30 @@ const server = createServer({allowHalfOpen: true}, async socket=>{
         session.on('open', async (id, data)=>{
             /** @type {import('node:net').Socket} */
             let socket, closed = false;
-            const close = function close(){
-                if(closed) return; closed = true;
-                session.close(id); socket?.destroy();
-            };
             try{
                 const target = new URL('tcp://'+data.toString());
                 if(target.pathname || target.hash || target.search || target.password || target.username) throw new Error('Invalid URL');
                 socket = connect(+(target.port||80), target.hostname.replace(/(^\[|\]$)/g, ''), ()=>0);
 
-                session.once('close-'+id, close);
-                socket.on('error', err=>console.error('Pollux socket error:', err)).once('close', close);
-                
-                socket.on('data', data=>session.data(id, data));
+                session.once('close-'+id, err=>{
+                    if(!closed) return; closed = true;
+                    if(err) socket.destroy(new Error(err.toString()));
+                    else socket.destroy();
+                });
+                socket
+                    .on('error', err=>console.error('Pollux socket error:', err))
+                    .once('close', ()=>{
+                        if(!closed) return; closed = true;
+                        try{ session.close(id); }catch(e){ /* Ignore */ }
+                    });
+
+                socket.on('data', data=>!closed && session.data(id, data));
                 session.on('data-'+id, data=>!closed && socket.write(data));
-                session.once('end-'+id, ()=>!closed&&socket.end());
-                socket.once('end', ()=>!socket.errored&&session.end(id));
-                await once(socket, 'connect'); session.open(id);
-            }catch(e){ close(); console.error('Pollux connection error', e); }
+                session.once('end-'+id, ()=>!closed && socket.end());
+                socket.once('end', ()=>!socket.errored && session.end(id));
+                await once(socket, 'connect');
+                session.open(id);
+            }catch(e){ console.error('Pollux connection error', e); }
         });
         session.on('close', id=>console.log('Stream %s close', id));
         session.on('error', err=>console.error('Session %s error:', sessionId, err));
@@ -95,6 +101,7 @@ const server = createServer({allowHalfOpen: true}, async socket=>{
         else if(reqData.method == 'POST'){
             session.add(1, ChunkedDecoder.fromStream(socket));
             console.log('Session %s added POST stream', reqData.headers['x-session-id']);
+            socket.write('HTTP/1.1 200 OK\r\nContent-Length: 14\r\n\r\nHello, world!'); // very suspenseful - what could the last character piossibly be????
         }
     } else return socket.end('HTTP/1.1 204 No Content\r\n\r\n');
 });

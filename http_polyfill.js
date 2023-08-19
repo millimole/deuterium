@@ -51,7 +51,7 @@ export class ChunkedDecoder extends Transform{
                 console.debug({errorPacket: this.buffer.toString()});
                 throw new Error('Chunked encoding error: chunk did not end with CRLF');
             }
-            if(this.buffer.length == 2){ 
+            if(this.buffer.length == 2){
                 if(this.leftover.length) console.debug(trailerDataWarning);
                 this.leftover = this.buffer = empty;
                 this.ended = true;
@@ -105,7 +105,7 @@ export function parseRequestPacket(data){
         .map(([name, ...rest]) => [name.toLowerCase(), rest.join(' ')]));
 
     return {
-        method, 
+        method,
         url,
         httpVersion: httpVersion.replace('HTTP/', ''),
         headers
@@ -117,14 +117,14 @@ export function parseResponsePacket(data){
     const [requestHeader] = data.toString('ascii').split('\r\n\r\n');
 
     const [firstLine, ...otherLines] = requestHeader.split('\n');
-    const [httpVersion, statusCode, statusText] = firstLine.trim().split(' ');
+    const [httpVersion, statusCode, ...statusText] = firstLine.trim().split(' ');
     const headers = Object.fromEntries(otherLines.filter(_=>_)
         .map(line=>line.split(':').map(part=>part.trim()))
         .map(([name, ...rest]) => [name.toLowerCase(), rest.join(' ')]));
 
     return {
-        statusCode, 
-        statusText,
+        statusCode,
+        statusText: statusText.join(' '),
         httpVersion: httpVersion.replace('HTTP/', ''),
         headers
     };

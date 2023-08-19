@@ -19,7 +19,7 @@ export class StreamManager extends EventEmitter{
     static TIMEOUT = 90000;
     constructor(){
         super(); const self = this;
-        
+
         // timeouts
         // this._onTimeout = ()=>this.emit('_error', new Error('No PING response, timed out'), true);
         // this._timeoutTimer = setTimeout(this._onTimeout, StreamManager.TIMEOUT);
@@ -38,7 +38,7 @@ export class StreamManager extends EventEmitter{
 
         this.alive = true;
         this.once('cleanup', ()=>this.alive = false);
-        
+
         /** @type {Map<string, Writable>} */ this.txs = new Map();
         /** @type {Map<string, Readable>} */ this.rxs = new Map();
         /** @type {Map<string, [string, boolean, string, boolean]>} */ this._streams = new Map();
@@ -48,12 +48,12 @@ export class StreamManager extends EventEmitter{
         this.once('cleanup', ()=>{
             this._streams.clear();
             this.txs.forEach(tx=>{
-                tx.off('close', this._onClose).off('tx', this._onData).off('error', this._onError);
-                tx.destroy();
+                tx.off('tx', this._onData).off('error', this._onError)
+                    .destroy();
             });
             this.txs.clear();
             this.rxs.forEach(rx=>{
-                rx.off('close', this._onClose).off('tx', this._onData).off('error', this._onError)
+                rx.off('tx', this._onData).off('error', this._onError)
                     .destroy();
             }); this.rxs.clear();
             // clearInterval(this._pingTimer); clearTimeout(this._timeoutTimer);
@@ -82,7 +82,10 @@ export class StreamManager extends EventEmitter{
             // removing all relevant streams
             for(let entry of self._streams.entries()){
                 const [key, value] = entry;
-                if(value[0] == txId || value[2] == rxId) self._streams.delete(key);
+                if(value[0] == txId || value[2] == rxId){
+                    self._streams.delete(key);
+                    self._emit('close', key);
+                }
             }
         };
         /** @this {Readable} @param {Buffer} _data*/ this._onData = function(_data){ try{
@@ -122,7 +125,6 @@ export class StreamManager extends EventEmitter{
             }else if(ev === 'C') {
                 if(self._streams.delete(id)){
                     self._emit('close', id, data);
-                    self._removeSessionListeners(id);
                 }
             } else if(!stream[3]) // stream must be open
                 throw throwError(`Frame ${_data.length} of type ${ev} sent over wrong tunnel`);
@@ -143,6 +145,10 @@ export class StreamManager extends EventEmitter{
     _emit(ev, id, ...data){
         this.emit(ev+'-'+id, ...data);
         this.emit(ev, id, ...data);
+        if(ev == 'close') this.removeAllListeners('close-'+id)
+            .removeAllListeners('open-'+id)
+            .removeAllListeners('data-'+id)
+            .removeAllListeners('end-'+id);
     }
 
     /** @param {{id?: string, name: string, data?: Buffer|string}} packet @param {(error?: Error|null)=>void} [cb] */
@@ -159,14 +165,6 @@ export class StreamManager extends EventEmitter{
         tx.write(frame, cb);
     }
 
-    /** @param {string} id */
-    _removeSessionListeners(id){
-        return this.removeAllListeners('close-'+id)
-            .removeAllListeners('open-'+id)
-            .removeAllListeners('data-'+id)
-            .removeAllListeners('end-'+id);
-    }
-    
     /** @param {0|1} type  */
     _randomTunnel(type){
         const keys = Array.from((type==0?this.txs:this.rxs).keys());
@@ -185,8 +183,8 @@ export class StreamManager extends EventEmitter{
         }
         else if(type == 1 && 'readable' in tunnel) {
             let tunnel2 = ChunkedDecoder.fromStream(tunnel);
-            this.rxs.set(name, tunnel = tunnel2.on('data', this._onData));
             try{ this._send({name:'A', data: name}); } catch(e){/*Ignore*/}
+            this.rxs.set(name, tunnel = tunnel2.on('data', this._onData));
         }
         else throw new Error('Either an invalid type (should be 0 or 1) or invalid tunnel (type 0 = writable, type 1 = readable) provided');
         tunnel.on('close', this._onClose).on('error', this._onError);
@@ -203,11 +201,11 @@ export class StreamManager extends EventEmitter{
         const onrecv = ()=>{
             console.debug('Stream %s closed', id, this._streams);
             this._emit('close', id);
-            this._removeSessionListeners(id)._streams.delete(id);
+            this._streams.delete(id);
         };
         this._send({id, name: 'C', data: error instanceof Error?error.message:error}, onrecv);
     }
-    
+
     /** Send data over a stream
      * @param {string} id @param {string|Buffer} data */
     data(id, data){ if(this.alive) this._send({id, name:'D', data}); }
@@ -221,7 +219,7 @@ export class StreamManager extends EventEmitter{
                 stream[1] = false;
                 if(!stream[3]){
                     this._emit('close', id);
-                    this._removeSessionListeners(id)._streams.delete(id);
+                    this._streams.delete(id);
                 }
             });
         }

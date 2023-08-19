@@ -25,7 +25,7 @@ const url = process.argv[2] || 'http://localhost:8080',
     [_rx, response1] = await request(url, true, `GET / HTTP/1.1\r\nHost: ${urlData.host}\r\n\r\n`),
     sessionId = response1.headers['x-session-id'],
     [_tx] = await request(url, false, `POST / HTTP/1.1\r\nHost:${urlData.host}\r\nX-Session-ID: ${sessionId}\r\nTransfer-Encoding:chunked\r\n\r\n`),
-    
+
     rx = ChunkedDecoder.fromStream(_rx), tx=ChunkedEncoder.fromStream(_tx),
     session = new StreamManager().on('cleanup', ()=>{ throw new Error('Session destroyed'); });
 
@@ -36,7 +36,7 @@ await (add(0).then(()=>add(1))); // four tunnels
 console.log('Successfully authorized to Pollux');
 session.on('close', id=>console.log('Stream %s close', id));
 
-_tx.on('data', d=>console.error('Premature response of', parseResponsePacket(d), d.toString()));
+_tx.on('data', d=>console.error('TX response of', parseResponsePacket(d), d.toString()));
 
 // top-tier error handlers
 const clientError = err => console.debug('Client error', err);
@@ -175,6 +175,7 @@ async function add(type){
     }
     else if (type == 0){
         const [tx] = await request(url, false, `POST / HTTP/1.1\r\nX-Session-ID: ${sessionId}\r\nHost: ${urlData.host}\r\n\r\n`);
+        tx.on('data', d=>console.error('TX response of', parseResponsePacket(d), d.toString()));
         session.add(0, ChunkedEncoder.fromStream(tx), (await once(session, 'ack'))[0]);
     }
 }
